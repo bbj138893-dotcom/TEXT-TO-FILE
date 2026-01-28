@@ -1,21 +1,31 @@
-import logging, os
+import os
+import zipfile
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 from aiogram.dispatcher import FSMContext
 from aiogram.dispatcher.filters.state import State, StatesGroup
+from googletrans import Translator
 
-from config import BOT_TOKEN, CHANNEL_LINK, DEVELOPER_ID, BOT_USERNAME, BOT_NAME
+# ================= CONFIG =================
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Railway ENV me dalna
+CHANNEL_LINK = "https://t.me/PROFESSORXZAMINHACKER"
+DEVELOPER_ID = "@SIGMAXZAMIN"
+BOT_USERNAME = "@FileExecutionBot"
+BOT_NAME = "TEXT TO FILES GENERATOR BOT"
 
-logging.basicConfig(level=logging.INFO)
-
-bot = Bot(BOT_TOKEN, parse_mode="HTML")
+bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot, storage=MemoryStorage())
+translator = Translator()
 
 # ================= STATES =================
-class FileFlow(StatesGroup):
+class FileState(StatesGroup):
     waiting_text = State()
     waiting_name = State()
     waiting_format = State()
+
+class TranslateState(StatesGroup):
+    waiting_text = State()
+    waiting_lang = State()
 
 # ================= KEYBOARDS =================
 def main_kb():
@@ -25,148 +35,164 @@ def main_kb():
     return kb
 
 def format_kb():
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        types.InlineKeyboardButton("📄 TXT", callback_data="txt"),
-        types.InlineKeyboardButton("🐍 PY", callback_data="py"),
-        types.InlineKeyboardButton("🌐 HTML", callback_data="html"),
-        types.InlineKeyboardButton("🧩 JSON", callback_data="json"),
-    )
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add("📄 TXT", "🐍 PY")
+    kb.add("🌐 HTML", "📦 ZIP")
+    return kb
+
+def next_kb():
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add("🔁 Create Next File")
+    kb.add("📢 Channel", "👨‍💻 Developer")
     return kb
 
 # ================= START =================
 @dp.message_handler(commands=["start"])
 async def start(message: types.Message):
-    name = message.from_user.first_name
     await message.answer(
-f"""━━━━━━━━━━━━━━━━━━━━━━━
+        f"""
+━━━━━━━━━━━━━━━━━━━━━━━
 💀 <b>{BOT_NAME}</b> 💀
 ━━━━━━━━━━━━━━━━━━━━━━━
 
-👑 Welcome <b>{name}</b>
+👑 Welcome <b>{message.from_user.first_name}</b>
 
-➤ Paste text  
-➤ Name your file  
+➤ Send text  
+➤ Name file  
 ➤ Choose format  
 
-❝ From idea to file — instantly ❞ ⚡
+⚡ From idea to file — instantly
 ━━━━━━━━━━━━━━━━━━━━━━━
 """,
-reply_markup=main_kb()
-)
+        reply_markup=main_kb()
+    )
 
-# ================= CHANNEL =================
-@dp.message_handler(lambda m: m.text == "📢 Channel")
-async def channel(message: types.Message):
-    await message.answer(
-"""━━━━━━━━━━━━━━━━━━━━━━━
-📢 <b>OFFICIAL CHANNEL</b>
-
-Updates • Features • Power tools  
-Everything first — only here ⚡
-
-👉 <b>Join now:</b>
-https://t.me/PROFESSORXZAMINHACKER
-━━━━━━━━━━━━━━━━━━━━━━━
-""",
-disable_web_page_preview=True
-)
-
-# ================= DEVELOPER =================
-@dp.message_handler(lambda m: m.text == "👨‍💻 Developer")
-async def developer(message: types.Message):
-    await message.answer(f"👨‍💻 Developer: {DEVELOPER_ID}")
-
-# ================= TEXT → FILE FLOW =================
+# ================= TEXT → FILE =================
 @dp.message_handler(lambda m: m.text == "📝 Text → File")
-async def start_file_flow(message: types.Message):
-    await FileFlow.waiting_text.set()
+async def text_to_file(message: types.Message):
     await message.answer(
-"""━━━━━━━━━━━━━━━━━━━━━━━
-✍️ <b>SEND YOUR TEXT</b>
+        "📝 <b>Send your text</b>\n\n❝ Your content starts here ❞",
+        reply_markup=types.ReplyKeyboardRemove()
+    )
+    await FileState.waiting_text.set()
 
-➤ Paste code or normal text  
-➤ No limits • No filters  
-
-❝ Words become files here ❞ ⚡
-━━━━━━━━━━━━━━━━━━━━━━━
-""",
-reply_markup=types.ReplyKeyboardRemove()
-)
-
-@dp.message_handler(state=FileFlow.waiting_text)
+@dp.message_handler(state=FileState.waiting_text)
 async def get_text(message: types.Message, state: FSMContext):
     await state.update_data(text=message.text)
-    await FileFlow.waiting_name.set()
     await message.answer(
-"""━━━━━━━━━━━━━━━━━━━━━━━
-📛 <b>SEND FILE NAME</b>
+        "📛 <b>Send file name</b>\n➤ Without extension\n➤ Example: index",
+    )
+    await FileState.waiting_name.set()
 
-➤ Without extension  
-➤ Example: <code>index</code>
-
-❝ Name it. Own it. ❞
-━━━━━━━━━━━━━━━━━━━━━━━
-"""
-)
-
-@dp.message_handler(state=FileFlow.waiting_name)
+@dp.message_handler(state=FileState.waiting_name)
 async def get_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await FileFlow.waiting_format.set()
     await message.answer(
-"🧩 <b>CHOOSE OUTPUT FORMAT</b>",
-reply_markup=format_kb()
-)
+        "🧩 <b>Choose output format</b>",
+        reply_markup=format_kb()
+    )
+    await FileState.waiting_format.set()
 
-@dp.callback_query_handler(state=FileFlow.waiting_format)
-async def generate_file(call: types.CallbackQuery, state: FSMContext):
+@dp.message_handler(state=FileState.waiting_format)
+async def make_file(message: types.Message, state: FSMContext):
     data = await state.get_data()
     text = data["text"]
     name = data["name"]
-    ext = call.data
 
-    filename = f"{name}.{ext}"
+    fmt_map = {
+        "📄 TXT": ".txt",
+        "🐍 PY": ".py",
+        "🌐 HTML": ".html",
+    }
 
-    with open(filename, "w", encoding="utf-8") as f:
-        f.write(
-f"""# Generated by {BOT_NAME}
-# Bot: {BOT_USERNAME}
-# Developer: {DEVELOPER_ID}
+    if message.text == "📦 ZIP":
+        zip_name = f"{name}.zip"
+        file_name = f"{name}.txt"
+        with open(file_name, "w", encoding="utf-8") as f:
+            f.write(text)
 
-{text}
-"""
-        )
+        with zipfile.ZipFile(zip_name, "w") as zipf:
+            zipf.write(file_name)
 
-    await call.message.answer_document(
-        open(filename, "rb")
-    )
+        await message.answer_document(open(zip_name, "rb"))
+        os.remove(file_name)
+        os.remove(zip_name)
 
-    await call.message.answer(
-f"""━━━━━━━━━━━━━━━━━━━━━━━
+    elif message.text in fmt_map:
+        ext = fmt_map[message.text]
+        file_name = name + ext
+        with open(file_name, "w", encoding="utf-8") as f:
+            f.write(text)
+
+        await message.answer_document(open(file_name, "rb"))
+        os.remove(file_name)
+    else:
+        await message.answer("❌ Select from buttons only")
+        return
+
+    await message.answer(
+        f"""
 🎉 <b>FILE CREATED SUCCESSFULLY</b>
-
-Your file is ready & delivered 📁  
-Clean • Accurate • Ready to use  
 
 🔁 Want to create another file?
 
-➤ Click 📝 Text → File  
-➤ Send new text  
-➤ Name the file  
-➤ Choose format  
-
-❝ One idea. Unlimited files. ❞ ⚡
-
 👨‍💻 Developer: {DEVELOPER_ID}
 🤖 Bot: {BOT_USERNAME}
-━━━━━━━━━━━━━━━━━━━━━━━
 """,
-reply_markup=main_kb()
+        reply_markup=next_kb()
+    )
+    await state.finish()
+
+@dp.message_handler(lambda m: m.text == "🔁 Create Next File")
+async def again(message: types.Message):
+    await text_to_file(message)
+
+# ================= TRANSLATE (FIXED) =================
+@dp.message_handler(lambda m: m.text == "🌍 Translate Text")
+async def tr_start(message: types.Message):
+    await message.answer("🌍 Send text to translate", reply_markup=types.ReplyKeyboardRemove())
+    await TranslateState.waiting_text.set()
+
+@dp.message_handler(state=TranslateState.waiting_text)
+async def tr_text(message: types.Message, state: FSMContext):
+    await state.update_data(text=message.text)
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add("🇬🇧 English", "🇵🇰 Urdu")
+    kb.add("🇮🇳 Hindi", "🇷🇺 Russian")
+    await message.answer("🌐 Choose target language", reply_markup=kb)
+    await TranslateState.waiting_lang.set()
+
+@dp.message_handler(state=TranslateState.waiting_lang)
+async def tr_done(message: types.Message, state: FSMContext):
+    lang_map = {
+        "🇬🇧 English": "en",
+        "🇵🇰 Urdu": "ur",
+        "🇮🇳 Hindi": "hi",
+        "🇷🇺 Russian": "ru"
+    }
+    if message.text not in lang_map:
+        await message.answer("❌ Choose from buttons")
+        return
+
+    data = await state.get_data()
+    result = translator.translate(data["text"], dest=lang_map[message.text])
+
+    await message.answer(
+        f"✅ <b>Translation Complete</b>\n\n📝 {result.text}",
+        reply_markup=main_kb()
+    )
+    await state.finish()
+
+# ================= INFO =================
+@dp.message_handler(lambda m: m.text == "📢 Channel")
+async def channel(message: types.Message):
+    await message.answer(
+        f"📢 <b>OFFICIAL CHANNEL</b>\n\n👉 Join now:\n{CHANNEL_LINK}"
     )
 
-    os.remove(filename)
-    await state.finish()
+@dp.message_handler(lambda m: m.text == "👨‍💻 Developer")
+async def dev(message: types.Message):
+    await message.answer(f"👨‍💻 Developer: {DEVELOPER_ID}")
 
 # ================= RUN =================
 if __name__ == "__main__":
