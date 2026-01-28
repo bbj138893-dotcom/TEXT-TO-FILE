@@ -1,44 +1,52 @@
 import logging
 import os
 from aiogram import Bot, Dispatcher, executor, types
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
 
-# ================= CONFIG =================
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # Railway variable
+# CONFIG
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_LINK = "https://t.me/PROFESSORXZAMINHACKER"
 DEVELOPER_ID = "@SIGMAXZAMIN"
+BOT_NAME = "TEXT TO FILES GENERATOR BOT"
 
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
-dp = Dispatcher(bot)
+dp = Dispatcher(bot, storage=MemoryStorage())
 
-# user state memory
-user_mode = {}
+# STATES
+class FileState(StatesGroup):
+    waiting_text = State()
+    waiting_filename = State()
+    waiting_format = State()
 
-# ================= KEYBOARDS =================
+# KEYBOARDS
 def main_kb():
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    kb.add("📝 Text → File", "🌐 Translate Text")
+    kb.add("📢 Channel", "👨‍💻 Developer")
+    return kb
+
+def format_kb():
     kb = types.InlineKeyboardMarkup(row_width=2)
     kb.add(
-        types.InlineKeyboardButton("📄 Text → File", callback_data="text_file"),
-        types.InlineKeyboardButton("🌍 Translate Text", callback_data="translate"),
-    )
-    kb.add(
-        types.InlineKeyboardButton("📚 Languages", callback_data="languages")
-    )
-    kb.add(
-        types.InlineKeyboardButton("📢 Channel", url=CHANNEL_LINK),
-        types.InlineKeyboardButton("👨‍💻 Developer", url=f"https://t.me/{DEVELOPER_ID[1:]}")
+        types.InlineKeyboardButton("📄 TXT", callback_data="txt"),
+        types.InlineKeyboardButton("🐍 PY", callback_data="py"),
+        types.InlineKeyboardButton("🌐 HTML", callback_data="html"),
+        types.InlineKeyboardButton("🧩 JSON", callback_data="json")
     )
     return kb
 
-# ================= START =================
+# START
 @dp.message_handler(commands=["start"])
-async def start_cmd(message: types.Message):
+async def start(message: types.Message):
     name = message.from_user.first_name
-
-    text = f"""
+    await message.answer(
+        f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💀 <b>TEXT TO FILES GENERATOR BOT</b> 💀
+💀 <b>{BOT_NAME}</b> 💀
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 👑 Welcome <b>{name}</b>
@@ -46,81 +54,111 @@ async def start_cmd(message: types.Message):
 This is not a normal generator.
 This is your <b>code weapon</b> ⚔️
 
-➤ Paste text  
-➤ Choose language  
-➤ Get ready-to-use files  
+➤ Text → Real Files  
+➤ Multiple Languages  
+➤ Ready-to-use output  
 
 ❝ From idea to file — instantly ❞ ⚡
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+""",
+        reply_markup=main_kb()
+    )
+
+# TEXT TO FILE
+@dp.message_handler(lambda m: m.text == "📝 Text → File")
+async def text_to_file(message: types.Message):
+    await FileState.waiting_text.set()
+    await message.answer(
+        """
+━━━━━━━━━━━━━━━━━━━━━━━
+✍️ <b>SEND YOUR TEXT</b>
+
+➤ Paste code or plain text  
+➤ No limits, no filters  
+➤ Your content stays private  
+
+❝ Words become files here ❞ ⚡
+━━━━━━━━━━━━━━━━━━━━━━━
 """
-    await message.answer(text, reply_markup=main_kb())
-
-# ================= CALLBACKS =================
-@dp.callback_query_handler(lambda c: c.data == "text_file")
-async def text_file_cb(call: types.CallbackQuery):
-    user_mode[call.from_user.id] = "text_file"
-    await call.message.reply(
-        "✍️ <b>Text → File Mode Activated</b>\n\n"
-        "➤ Now send the text you want to convert into a file.\n"
-        "➤ File will be generated instantly."
     )
-    await call.answer()
 
-@dp.callback_query_handler(lambda c: c.data == "translate")
-async def translate_cb(call: types.CallbackQuery):
-    user_mode[call.from_user.id] = "translate"
-    await call.message.reply(
-        "🌍 <b>Translate Mode Activated</b>\n\n"
-        "➤ Send text you want to translate.\n"
-        "➤ Language support coming soon."
+@dp.message_handler(state=FileState.waiting_text)
+async def get_text(message: types.Message, state: FSMContext):
+    await state.update_data(text=message.text)
+    await FileState.waiting_filename.set()
+    await message.answer(
+        """
+━━━━━━━━━━━━━━━━━━━━━━━
+📛 <b>SEND FILE NAME</b>
+
+➤ Without extension  
+➤ Example: <code>index</code>  
+
+❝ Name it. Own it. ❞
+━━━━━━━━━━━━━━━━━━━━━━━
+"""
     )
-    await call.answer()
 
-@dp.callback_query_handler(lambda c: c.data == "languages")
-async def languages_cb(call: types.CallbackQuery):
-    await call.message.reply(
-        "📚 <b>Supported Output Types</b>\n\n"
-        "• TXT\n"
-        "• PY (Python)\n"
-        "• HTML\n"
-        "• JSON\n\n"
-        "More coming soon ⚡"
+@dp.message_handler(state=FileState.waiting_filename)
+async def get_filename(message: types.Message, state: FSMContext):
+    await state.update_data(filename=message.text)
+    await FileState.waiting_format.set()
+    await message.answer(
+        "🧩 <b>CHOOSE OUTPUT FORMAT</b>",
+        reply_markup=format_kb()
     )
-    await call.answer()
 
-# ================= MESSAGE HANDLER =================
-@dp.message_handler()
-async def handle_text(message: types.Message):
-    mode = user_mode.get(message.from_user.id)
+@dp.callback_query_handler(state=FileState.waiting_format)
+async def make_file(call: types.CallbackQuery, state: FSMContext):
+    data = await state.get_data()
+    text = data["text"]
+    filename = data["filename"]
+    ext = call.data
 
-    if mode == "text_file":
-        text = message.text
+    content = f"""# Generated by {BOT_NAME}
+# Developer: {DEVELOPER_ID}
+# Channel: {CHANNEL_LINK}
 
-        file_path = "output.txt"
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(text)
+{text}
+"""
 
-        await message.reply_document(
-            open(file_path, "rb"),
-            caption="✅ <b>Your file is ready!</b>\nGenerated by Text to Files Generator Bot"
-        )
+    file_path = f"{filename}.{ext}"
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(content)
 
-        user_mode.pop(message.from_user.id, None)
+    await call.message.answer_document(
+        open(file_path, "rb"),
+        caption="✅ <b>Your file is ready!</b>"
+    )
 
-    elif mode == "translate":
-        await message.reply(
-            "⚠️ Translation engine will be added next.\n"
-            "For now, use Text → File feature."
-        )
-        user_mode.pop(message.from_user.id, None)
+    await call.message.answer(
+        f"""
+━━━━━━━━━━━━━━━━━━━━━━━
+🎉 <b>DONE!</b>
 
-    else:
-        await message.reply(
-            "⚠️ Please select an option from below first.",
-            reply_markup=main_kb()
-        )
+Your file is ready 📄  
+Simple • Fast • Reliable  
 
-# ================= RUN =================
+Use it anywhere — no edits needed.
+
+👨‍💻 Developer: {DEVELOPER_ID}
+━━━━━━━━━━━━━━━━━━━━━━━
+"""
+    )
+
+    os.remove(file_path)
+    await state.finish()
+
+# EXTRA BUTTONS
+@dp.message_handler(lambda m: m.text == "📢 Channel")
+async def channel(message: types.Message):
+    await message.answer(CHANNEL_LINK)
+
+@dp.message_handler(lambda m: m.text == "👨‍💻 Developer")
+async def dev(message: types.Message):
+    await message.answer(DEVELOPER_ID)
+
+# RUN
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
