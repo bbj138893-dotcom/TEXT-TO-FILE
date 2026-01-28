@@ -1,41 +1,42 @@
 import logging
+import os
 from aiogram import Bot, Dispatcher, executor, types
-from config import BOT_TOKEN, CHANNEL_LINK, DEVELOPER_ID
+
+# ================= CONFIG =================
+BOT_TOKEN = os.getenv("BOT_TOKEN")  # Railway variable
+CHANNEL_LINK = "https://t.me/PROFESSORXZAMINHACKER"
+DEVELOPER_ID = "@SIGMAXZAMIN"
 
 logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=BOT_TOKEN, parse_mode="HTML")
 dp = Dispatcher(bot)
 
-# ─────────── Keyboards ───────────
+# user state memory
+user_mode = {}
 
-def start_keyboard():
+# ================= KEYBOARDS =================
+def main_kb():
     kb = types.InlineKeyboardMarkup(row_width=2)
     kb.add(
-        types.InlineKeyboardButton("🚀 Start Generating", callback_data="start_gen"),
-        types.InlineKeyboardButton("📘 How It Works", callback_data="how")
+        types.InlineKeyboardButton("📄 Text → File", callback_data="text_file"),
+        types.InlineKeyboardButton("🌍 Translate Text", callback_data="translate"),
     )
     kb.add(
-        types.InlineKeyboardButton("📢 Updates", url=CHANNEL_LINK),
+        types.InlineKeyboardButton("📚 Languages", callback_data="languages")
+    )
+    kb.add(
+        types.InlineKeyboardButton("📢 Channel", url=CHANNEL_LINK),
         types.InlineKeyboardButton("👨‍💻 Developer", url=f"https://t.me/{DEVELOPER_ID[1:]}")
     )
     return kb
 
+# ================= START =================
+@dp.message_handler(commands=["start"])
+async def start_cmd(message: types.Message):
+    name = message.from_user.first_name
 
-def generate_keyboard():
-    kb = types.InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        types.InlineKeyboardButton("📝 Text → File", callback_data="text_file"),
-        types.InlineKeyboardButton("🌍 Translate Text", callback_data="translate")
-    )
-    kb.add(
-        types.InlineKeyboardButton("📚 Languages", callback_data="langs"),
-        types.InlineKeyboardButton("⬅️ Back", callback_data="back")
-    )
-    return kb
-
-
-WELCOME_TEXT = """
+    text = f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 💀 <b>TEXT TO FILES GENERATOR BOT</b> 💀
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -53,68 +54,73 @@ This is your <b>code weapon</b> ⚔️
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
+    await message.answer(text, reply_markup=main_kb())
 
-
-# ─────────── Handlers ───────────
-
-@dp.message_handler(commands=["start"])
-async def start_cmd(message: types.Message):
-    name = message.from_user.first_name
-    await message.answer(
-        WELCOME_TEXT.format(name=name),
-        reply_markup=start_keyboard()
-    )
-
-
-@dp.callback_query_handler(lambda c: c.data == "start_gen")
-async def start_generate(call: types.CallbackQuery):
-    await call.message.edit_text(
-        "🚀 <b>Select an option below</b>\n\n⚠️ This bot creates real files.",
-        reply_markup=generate_keyboard()
-    )
-
-
-@dp.callback_query_handler(lambda c: c.data == "how")
-async def how_it_works(call: types.CallbackQuery):
+# ================= CALLBACKS =================
+@dp.callback_query_handler(lambda c: c.data == "text_file")
+async def text_file_cb(call: types.CallbackQuery):
+    user_mode[call.from_user.id] = "text_file"
     await call.message.reply(
-        "📘 <b>How This Bot Works</b>\n\n"
-        "➤ Send your text\n"
-        "➤ Select language\n"
-        "➤ Get instant file\n\n"
-        "No login • No limits • Free"
+        "✍️ <b>Text → File Mode Activated</b>\n\n"
+        "➤ Now send the text you want to convert into a file.\n"
+        "➤ File will be generated instantly."
     )
+    await call.answer()
 
-
-@dp.callback_query_handler(lambda c: c.data == "langs")
-async def language_list(call: types.CallbackQuery):
+@dp.callback_query_handler(lambda c: c.data == "translate")
+async def translate_cb(call: types.CallbackQuery):
+    user_mode[call.from_user.id] = "translate"
     await call.message.reply(
-        "📚 <b>Supported Formats</b>\n\n"
-        "➤ Python (.py)\n"
-        "➤ HTML (.html)\n"
-        "➤ JavaScript (.js)\n"
-        "➤ CSS (.css)\n"
-        "➤ JSON (.json)\n"
-        "➤ Markdown (.md)\n"
-        "➤ Text (.txt)"
+        "🌍 <b>Translate Mode Activated</b>\n\n"
+        "➤ Send text you want to translate.\n"
+        "➤ Language support coming soon."
     )
+    await call.answer()
 
-
-@dp.callback_query_handler(lambda c: c.data == "back")
-async def back_to_menu(call: types.CallbackQuery):
-    await call.message.edit_text(
-        "⬅️ Back to main menu",
-        reply_markup=start_keyboard()
+@dp.callback_query_handler(lambda c: c.data == "languages")
+async def languages_cb(call: types.CallbackQuery):
+    await call.message.reply(
+        "📚 <b>Supported Output Types</b>\n\n"
+        "• TXT\n"
+        "• PY (Python)\n"
+        "• HTML\n"
+        "• JSON\n\n"
+        "More coming soon ⚡"
     )
+    await call.answer()
 
-
+# ================= MESSAGE HANDLER =================
 @dp.message_handler()
-async def receive_text(message: types.Message):
-    await message.reply(
-        "🛠 <b>Text received</b>\n\n"
-        "File generation engine will be added next.\n\n"
-        f"👨‍💻 Developer: <b>{DEVELOPER_ID}</b>"
-    )
+async def handle_text(message: types.Message):
+    mode = user_mode.get(message.from_user.id)
 
+    if mode == "text_file":
+        text = message.text
 
+        file_path = "output.txt"
+        with open(file_path, "w", encoding="utf-8") as f:
+            f.write(text)
+
+        await message.reply_document(
+            open(file_path, "rb"),
+            caption="✅ <b>Your file is ready!</b>\nGenerated by Text to Files Generator Bot"
+        )
+
+        user_mode.pop(message.from_user.id, None)
+
+    elif mode == "translate":
+        await message.reply(
+            "⚠️ Translation engine will be added next.\n"
+            "For now, use Text → File feature."
+        )
+        user_mode.pop(message.from_user.id, None)
+
+    else:
+        await message.reply(
+            "⚠️ Please select an option from below first.",
+            reply_markup=main_kb()
+        )
+
+# ================= RUN =================
 if __name__ == "__main__":
     executor.start_polling(dp, skip_updates=True)
